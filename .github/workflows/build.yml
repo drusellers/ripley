@@ -1,0 +1,78 @@
+name: Build Rust Package
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: macOS-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          override-file: Cargo.toml
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Archive binary
+        run: tar -czvf ripley.tar.gz -C target/release ripley
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./ripley.tar.gz
+          asset_name: ripley.tar.gz
+          asset_content_type: application/gzip
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+  
+      - name: Publish to Homebrew
+        run: |
+          git clone https://github.com/drusellers/homebrew-tap.git
+          cd homebrew-tap
+          echo "class Ripley < Formula
+            desc \"Ripley a database tool\"
+            homepage \"https://github.com/drusellers/ripley\"
+            url \"https://github.com/drusellers/ripley/releases/download/${{ github.ref }}/ripley.tar.gz\"
+            sha256 \"$(shasum -a 256 ../my-crate.tar.gz | awk '{ print $1 }')\"
+            version \"${{ github.ref }}\"
+  
+            def install
+              bin.install \"ripley\"
+            end
+          end" > ripley.rb
+          git add ripley.rb
+          git commit -m "Update formula for version ${{ github.ref }}"
+          git push origin main

@@ -1,0 +1,9 @@
+[package]
+name = "ripley"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+structopt = { version = "0.3", default-features = false }
+serde_yaml = "0.9.33"
+serde = { version = "1.0.216", features = ["derive"] }
